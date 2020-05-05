@@ -92,6 +92,6 @@ class insta:
 
 
 if __name__ == '__main__':
-    profile = 'insperedu'
+    profile = 'semantixbr'
     a = insta().write(profile)
     print(a)

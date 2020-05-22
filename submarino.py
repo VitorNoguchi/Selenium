@@ -1,79 +1,138 @@
-import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from unidecode import unidecode
 import csv
+import logging
+from datetime import datetime
 
-bestseller_catalog = {'nome': [], 'categoria': [], 'subcategoria': [], 'preco': []}
-release_catalog = {'nome': [], 'categoria': [], 'subcategoria': [], 'preco': []}
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s')
+file_handler = logging.FileHandler('Submarino.log')
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
 
-class submarino:
+class books_submarino:
     def __init__(self):
         self.driver = webdriver.Chrome('/home/semantix/SeleniumDriver/chromedriver_linux64/chromedriver')
         self.driver.get('https://www.submarino.com.br/')
-        self.driver.find_element_by_css_selector("a[title=Livros]").click()
         self.wait = WebDriverWait(self.driver, 10)
+        self.time_init = datetime.now()
 
-    def best_sellers(self):
-        self.wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='collapse-os mais buscados']/ul/li[3]/a"))).click()
-        self.wait.until(EC.presence_of_all_elements_located((By.XPATH, "//*[@id='main-top']/div[3]/div/div/div/div")))
-        count = self.driver.find_elements(By.XPATH, "//*[@id='main-top']/div[3]/div/div/div/div")
-        for a in range(1, len(count)):
-            self.wait.until(EC.element_to_be_clickable((By.XPATH, f"//*[@id='main-top']/div[3]/div/div/div/div[{a}]/div[2]/section/a")))
-            self.driver.find_element(By.XPATH, f"//*[@id='main-top']/div[3]/div/div/div/div[{a}]/div[2]/section/a").click()
-            bestseller_catalog['nome'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,'//*[@id="product-name-default"]'))).get_attribute("textContent"))
-            bestseller_catalog['categoria'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,"//*[@id='content']/div/div/div[2]/div/section/div/div[1]/div/div[3]/a/div/span"))).get_attribute("textContent"))
+    def clean_category_name(self, categories_list):
+        categories =[]
+        for g in range(0,len(categories_list)):
+            category = categories_list[g].lower()
+            category = category.replace(",", "")
+            category = category.replace("/", " ")
+            category = category.replace("&", "e")
+            category = category.replace("º", "o")
+            category = category.replace("+", "")
+            category = category.replace("(", "")
+            category = category.replace(")", "")
+            category = category.replace("-", " ")
+            category = category.replace("  ", " ")
+            category = category.replace(" ", "-")
+            category = category.replace("--", "-")
+            category = unidecode(category)
+            categories.append(category)
+        return categories
+
+    def get_attribute(self):
+        namesXpath = "//*[@id='content-middle']/div[4]/div/div/div/div[1]/div/div/div[2]/a/section/div[2]/div[1]/h2"
+        pricesXpath = "//*[@id='content-middle']/div[4]/div/div/div/div[1]/div/div/div[2]/a/section/div[2]/div[2]/div[2]/span"
+        self.wait.until(EC.presence_of_all_elements_located((By.XPATH, namesXpath)))
+        self.wait.until(EC.presence_of_all_elements_located((By.XPATH, pricesXpath)))
+        names_list = self.driver.find_elements(By.XPATH, namesXpath)
+        prices_list = self.driver.find_elements(By.XPATH, pricesXpath)
+        names = []
+        prices = []
+        for f in range(0, len(names_list)):
+            names.append(names_list[f].get_attribute("textContent"))
             try:
-                bestseller_catalog['subcategoria'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,"//*[@id='content']/div/div/div[2]/div/section/div/div[1]/div/div[4]/a/div/span"))).get_attribute("textContent"))
+                prices.append(prices_list[f].get_attribute("textContent"))
             except:
-                bestseller_catalog['subcategoria'].append('none')
-            bestseller_catalog['preco'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,"//*[@id='content']/div/div/div[2]/div/section/div/div[2]/div[2]/div/div[1]/div/div[1]/div/div/span"))).get_attribute("textContent"))
-            print(bestseller_catalog)
-            self.driver.back()
-        self.driver.quit()
-        return bestseller_catalog
+                prices.append('NaN')
+        return [names, prices]
 
-    def release(self):
-        self.wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@id='collapse-os mais buscados']/ul/li[2]/a")))
-        self.driver.find_element(By.XPATH, "//*[@id='collapse-os mais buscados']/ul/li[2]/a").click()
-        for i in range(2,5):
-            self.wait.until(EC.presence_of_all_elements_located((By.XPATH, "//*[@id='content-middle']/div[3]/div/div/div/div[1]/div")))
-            count = self.driver.find_elements(By.XPATH, "//*[@id='content-middle']/div[3]/div/div/div/div[1]/div")
-            for b in range(1, len(count)+1):
-                self.wait.until((EC.element_to_be_clickable((By.XPATH, f"//*[@id='content-middle']/div[3]/div/div/div/div[1]/div[{b}]/div/div[2]/a"))))
-                self.driver.find_element(By.XPATH, f"//*[@id='content-middle']/div[3]/div/div/div/div[1]/div[{b}]/div/div[2]/a").click()
-                release_catalog['nome'].append(self.wait.until(EC.presence_of_element_located((By.ID, 'product-name-default'))).get_attribute("textContent"))
-                release_catalog['categoria'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,"//*[@id='content']/div/div/div[2]/div/section/div/div[1]/div/div[3]/a/div/span"))).get_attribute("textContent"))
+    def write(self, categoria, subcategoria, nomes, precos):
+        with open('SubmarinoBooks1.csv', mode='a') as csvfile:
+            catalog = csv.writer(csvfile, delimiter='|', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            for a in range(0,len(nomes)):
+                nome = nomes[a].replace('Livro - ', '')
+                preco = precos[a].replace('R$ ', '')
+                catalog.writerow([nome, categoria, subcategoria, preco])
+
+    def get_books(self):
+        a = 0
+        while a == 0:
+            try:
+                nav_bar = "//*[@id='h_menu']/div/div/a"
+                nav_bar_books = "//*[@id='h_menu']/div/div/div/div/div[2]/ul/li[2]/a"
+                self.wait.until(EC.element_to_be_clickable((By.XPATH, nav_bar)))
+                self.driver.find_element(By.XPATH, nav_bar).click()
+                self.wait.until(EC.element_to_be_clickable((By.XPATH, nav_bar_books)))
+                self.driver.find_element(By.XPATH, nav_bar_books).click()
+                a += 1
+            except:
+                self.driver.refresh()
+        categoryXpath = "//*[@id='collapse-categorias']/ul/li"
+        self.wait.until(EC.presence_of_all_elements_located((By.XPATH, categoryXpath)))
+        categories_list = self.driver.find_elements(By.XPATH, categoryXpath)
+        categories = []
+        for b in range(0,len(categories_list)):
+            categories.append(categories_list[b].get_attribute("textContent"))
+        category = books_submarino.clean_category_name(self, categories)
+        for c in range(0,len(category)):
+            if category[c] == "assinatura-de-revista-e-jornal":
+                self.driver.get("https://www.submarino.com.br/categoria/livros/assinatura-de-revista-e-jornal?ordenacao=relevance")
+            else:
+                self.driver.get(f"https://www.submarino.com.br/categoria/livros/{category[c]}/l/B2W?ordenacao=relevance")
+            try:
+                subcategoriesXpath = "//*[@id='collapse-categorias']/ul/li"
+                self.wait.until(EC.presence_of_all_elements_located((By.XPATH, subcategoriesXpath)))
+                subcategories_list = self.driver.find_elements(By.XPATH, subcategoriesXpath)
+                subcategories = []
+                for d in range(0,len(subcategories_list)):
+                    subcategories.append(subcategories_list[d].get_attribute("textContent"))
+                subcategory = books_submarino.clean_category_name(self, subcategories)
+                for e in range(0, len(subcategory)):
+                    if subcategory[e][-1] == "-":
+                        subcategory[e] = subcategory[e][:-1]
+                    self.driver.get(f"https://www.submarino.com.br/categoria/livros/{category[c]}/{subcategory[e]}/l/B2W?ordenacao=relevance")
+                    atr = books_submarino.get_attribute(self)
+                    books_submarino.write(self, categories[c], subcategories[e], atr[0], atr[1])
+                    try:
+                        self.wait.until(EC.presence_of_all_elements_located((By.XPATH, "//*[@id='content-middle']/div[4]/div/div/div/div[2]/div/ul/li")))
+                        pages = self.driver.find_elements(By.XPATH,"//*[@id='content-middle']/div[4]/div/div/div/div[2]/div/ul/li")
+                        for h in range(2, len(pages)-1):
+                            self.driver.get(f"https://www.submarino.com.br/categoria/livros/{category[c]}/{subcategory[e]}/l/B2W/pagina-{h}?ordenacao=relevance")
+                            atr = books_submarino.get_attribute(self)
+                            books_submarino.write(self, categories[c], subcategories[e], atr[0], atr[1])
+                    except:
+                        pass
+            except:
+                atr = books_submarino.get_attribute(self)
+                books_submarino.write(self, categories[c], subcategories[e], atr[0], atr[1])
                 try:
-                    release_catalog['subcategoria'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,"//*[@id='content']/div/div/div[2]/div/section/div/div[1]/div/div[4]/a/div/span"))).get_attribute("textContent"))
+                    self.wait.until(EC.presence_of_all_elements_located(
+                        (By.XPATH, "//*[@id='content-middle']/div[4]/div/div/div/div[2]/div/ul/li")))
+                    pages = self.driver.find_elements(By.XPATH,
+                                                      "//*[@id='content-middle']/div[4]/div/div/div/div[2]/div/ul/li")
+                    for h in range(2, len(pages) - 1):
+                        self.driver.get(
+                            f"https://www.submarino.com.br/categoria/livros/{category[c]}/{subcategory[e]}/l/B2W/pagina-{h}?ordenacao=relevance")
+                        atr = books_submarino.get_attribute(self)
+                        books_submarino.write(self, categories[c], subcategories[e], atr[0], atr[1])
                 except:
-                    release_catalog['subcategoria'].append('none')
-                release_catalog['preco'].append(self.wait.until(EC.presence_of_element_located((By.XPATH,"//*[@id='content']/div/div/div[2]/div/section/div/div[2]/div[2]/div/div[1]/div/div[1]/div[1]/div/span"))).get_attribute("textContent"))
-                print(release_catalog)
-                self.driver.back()
-                time.sleep(2)
-            i += 1
-            self.wait.until(EC.element_to_be_clickable((By.XPATH, f"//*[@id='content-middle']/div[3]/div/div/div/div[2]/div/ul/li[{i}]/a"))).click()
-            time.sleep(2)
+                    pass
+        self.time_end = datetime.now()
+        time_delta = f"{self.time_end - self.time_init}"
+        time_delta = time_delta.split(".")[0]
+        logger.info(f"finish in {time_delta}")
         self.driver.quit()
-        return release_catalog
-
-    def write_release(self):
-        data_rl = submarino.release(self)
-        with open('release.csv', mode='w') as release_csv:
-            catalog_rl = csv.writer(release_csv, delimiter = ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            for a in range(0, len(data_rl['nome'])):
-                catalog_rl.writerow([data_rl['nome'][a], data_rl['categoria'][a], data_rl['subcategoria'][a], data_rl['preco'][a]])
-
-    def write_bestseller(self):
-        data_bs = submarino.best_sellers(self)
-        with open('bestseller.csv', mode='w') as bestseller_csv:
-            catalog_bs = csv.writer(bestseller_csv, delimiter = ',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            for b in range(0, len(data_bs['nome'])):
-                catalog_bs.writerow([data_bs['nome'][b], data_bs['categoria'][b], data_bs['subcategoria'][b], data_bs['preco'][b]])
-
 
 if __name__ == '__main__':
-    books = submarino().write_bestseller()
-    print(books)
+    books_submarino().get_books()
